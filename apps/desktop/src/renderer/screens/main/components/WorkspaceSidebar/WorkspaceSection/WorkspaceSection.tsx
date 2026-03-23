@@ -39,6 +39,7 @@ interface WorkspaceSectionProps {
 	isSidebarCollapsed?: boolean;
 	allSections?: { id: string; name: string }[];
 	orderedWorkspaceIds?: string[];
+	onToggle?: () => void;
 }
 
 export function WorkspaceSection({
@@ -53,6 +54,7 @@ export function WorkspaceSection({
 	isSidebarCollapsed = false,
 	allSections = [],
 	orderedWorkspaceIds,
+	onToggle,
 }: WorkspaceSectionProps) {
 	const utils = electronTrpc.useUtils();
 	const [isRenaming, setIsRenaming] = useState(false);
@@ -70,7 +72,9 @@ export function WorkspaceSection({
 		canAccept: (item) =>
 			item.projectId === projectId && item.sectionId !== sectionId,
 		targetSectionId: sectionId,
-		onAutoExpand: isCollapsed ? () => mutations.toggle() : undefined,
+		onAutoExpand: isCollapsed
+			? () => (onToggle ?? mutations.toggle)()
+			: undefined,
 	});
 
 	const reorderProjectChildren = useReorderProjectChildren();
@@ -141,13 +145,14 @@ export function WorkspaceSection({
 		sectionDrag(sectionDrop(sectionHeaderRef));
 	}, [isSidebarCollapsed, sectionDrag, sectionDrop]);
 
+	const toggle = onToggle ?? mutations.toggle;
 	const handleClick = useCallback(() => {
 		if (clickTimer.current) return;
 		clickTimer.current = setTimeout(() => {
 			clickTimer.current = null;
-			mutations.toggle();
+			toggle();
 		}, 250);
-	}, [mutations]);
+	}, [toggle]);
 
 	const handleDoubleClick = useCallback(() => {
 		if (clickTimer.current) {

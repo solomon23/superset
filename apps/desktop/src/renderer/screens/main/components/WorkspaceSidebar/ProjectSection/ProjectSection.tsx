@@ -2,7 +2,7 @@ import { toast } from "@superset/ui/sonner";
 import { cn } from "@superset/ui/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import type { PRCategory } from "lib/trpc/routers/workspaces/utils/map-pr-state";
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useDrag, useDrop } from "react-dnd";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useReorderProjects } from "renderer/react-query/projects";
@@ -22,10 +22,10 @@ import { ProjectHeader } from "./ProjectHeader";
 const PROJECT_TYPE = "PROJECT";
 
 const PR_ORDER: readonly PRCategory[] = [
+	"merged",
 	"approved",
 	"in-review",
 	"draft",
-	"merged",
 	"closed",
 	"no-pr",
 ];
@@ -120,6 +120,18 @@ export function ProjectSection({
 			},
 		);
 
+	const [collapsedVirtualSections, setCollapsedVirtualSections] = useState<
+		Set<string>
+	>(new Set());
+	const toggleVirtualSection = useCallback((sectionId: string) => {
+		setCollapsedVirtualSections((prev) => {
+			const next = new Set(prev);
+			if (next.has(sectionId)) next.delete(sectionId);
+			else next.add(sectionId);
+			return next;
+		});
+	}, []);
+
 	const isCollapsed = isProjectCollapsed(projectId);
 	const totalWorkspaceCount =
 		workspaces.length +
@@ -171,12 +183,13 @@ export function ProjectSection({
 				const catWs = grouped.get(cat) ?? [];
 				if (catWs.length === 0) continue;
 				for (const ws of catWs) ids.push(ws.id);
+				const sectionId = `auto-pr-${cat}`;
 				const section: SidebarSection = {
-					id: `auto-pr-${cat}`,
+					id: sectionId,
 					projectId,
 					name: PR_LABELS[cat],
 					tabOrder: topLevelIndex,
-					isCollapsed: false,
+					isCollapsed: collapsedVirtualSections.has(sectionId),
 					color: PR_COLORS[cat] ?? null,
 					workspaces: catWs,
 				};
@@ -240,6 +253,7 @@ export function ProjectSection({
 	}, [
 		autoOrganizeEnabled,
 		prStatuses,
+		collapsedVirtualSections,
 		shortcutBaseIndex,
 		sections,
 		topLevelItems,
@@ -412,6 +426,11 @@ export function ProjectSection({
 											sectionId={null}
 											sections={sections}
 											orderedWorkspaceIds={orderedWorkspaceIds}
+											onToggle={
+												autoOrganizeEnabled
+													? () => toggleVirtualSection(item.section.id)
+													: undefined
+											}
 										/>
 									) : (
 										<WorkspaceSection
@@ -427,6 +446,11 @@ export function ProjectSection({
 											isSidebarCollapsed
 											allSections={sections}
 											orderedWorkspaceIds={orderedWorkspaceIds}
+											onToggle={
+												autoOrganizeEnabled
+													? () => toggleVirtualSection(item.section.id)
+													: undefined
+											}
 										/>
 									),
 								)}
@@ -542,6 +566,11 @@ export function ProjectSection({
 										shortcutBaseIndex={item.shortcutBaseIndex}
 										allSections={sections}
 										orderedWorkspaceIds={orderedWorkspaceIds}
+										onToggle={
+											autoOrganizeEnabled
+												? () => toggleVirtualSection(item.section.id)
+												: undefined
+										}
 									/>
 								),
 							)}

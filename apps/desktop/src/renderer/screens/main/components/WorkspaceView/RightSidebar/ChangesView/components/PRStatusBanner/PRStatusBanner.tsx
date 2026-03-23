@@ -1,16 +1,8 @@
 import type { GitHubStatus } from "@superset/local-db";
-import {
-	DropdownMenu,
-	DropdownMenuContent,
-	DropdownMenuItem,
-	DropdownMenuLabel,
-	DropdownMenuTrigger,
-} from "@superset/ui/dropdown-menu";
 import { toast } from "@superset/ui/sonner";
 import { cn } from "@superset/ui/utils";
 import {
 	LuCheck,
-	LuChevronDown,
 	LuExternalLink,
 	LuGitMerge,
 	LuGitPullRequest,
@@ -153,56 +145,23 @@ export function PRStatusBanner({
 			<StatusIcon className={cn("size-3 shrink-0", iconColor)} />
 
 			{variant === "ready" && (
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<button
-							type="button"
-							className={cn(
-								"flex items-center gap-1 shrink-0 rounded px-2 py-1 font-medium transition-colors",
-								"bg-emerald-500 text-white hover:bg-emerald-600",
-								mergePRMutation.isPending && "opacity-60",
-							)}
-							disabled={mergePRMutation.isPending}
-						>
-							{mergePRMutation.isPending ? (
-								<LuLoader className="size-3 animate-spin" />
-							) : (
-								<LuGitMerge className="size-3" />
-							)}
-							Merge
-							<LuChevronDown className="size-3" />
-						</button>
-					</DropdownMenuTrigger>
-					<DropdownMenuContent align="end" className="w-44">
-						<DropdownMenuLabel className="text-xs text-muted-foreground font-normal">
-							Merge
-						</DropdownMenuLabel>
-						<DropdownMenuItem
-							onClick={() => handleMerge("squash")}
-							className="text-xs"
-							disabled={mergePRMutation.isPending}
-						>
-							<LuGitMerge className="size-3.5" />
-							Squash and merge
-						</DropdownMenuItem>
-						<DropdownMenuItem
-							onClick={() => handleMerge("merge")}
-							className="text-xs"
-							disabled={mergePRMutation.isPending}
-						>
-							<LuGitMerge className="size-3.5" />
-							Create merge commit
-						</DropdownMenuItem>
-						<DropdownMenuItem
-							onClick={() => handleMerge("rebase")}
-							className="text-xs"
-							disabled={mergePRMutation.isPending}
-						>
-							<LuGitMerge className="size-3.5" />
-							Rebase and merge
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
+				<button
+					type="button"
+					onClick={() => handleMerge("squash")}
+					className={cn(
+						"flex items-center gap-1 shrink-0 rounded px-2 py-1 font-medium transition-colors",
+						"bg-emerald-500 text-white hover:bg-emerald-600",
+						mergePRMutation.isPending && "opacity-60",
+					)}
+					disabled={mergePRMutation.isPending}
+				>
+					{mergePRMutation.isPending ? (
+						<LuLoader className="size-3 animate-spin" />
+					) : (
+						<LuGitMerge className="size-3" />
+					)}
+					Merge
+				</button>
 			)}
 		</div>
 	);
