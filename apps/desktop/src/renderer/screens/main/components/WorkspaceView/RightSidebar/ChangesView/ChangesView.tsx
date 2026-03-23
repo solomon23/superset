@@ -27,6 +27,7 @@ import { sidebarHeaderTabTriggerClassName } from "../headerTabStyles";
 import { CategorySection } from "./components/CategorySection";
 import { ChangesHeader } from "./components/ChangesHeader";
 import { CommitInput } from "./components/CommitInput";
+import { PRStatusBanner } from "./components/PRStatusBanner";
 import { ReviewPanel } from "./components/ReviewPanel";
 import { useOrderedSections } from "./hooks";
 import { getPRActionState, shouldAutoCreatePRAfterPublish } from "./utils";
@@ -686,6 +687,16 @@ export function ChangesView({
 
 	return (
 		<div className="flex flex-col flex-1 min-h-0">
+			{activePullRequest &&
+				(activePullRequest.state === "open" ||
+					activePullRequest.state === "draft") &&
+				worktreePath && (
+					<PRStatusBanner
+						pr={activePullRequest}
+						worktreePath={worktreePath}
+						onRefresh={handleRefresh}
+					/>
+				)}
 			<Tabs
 				value={activeTab}
 				onValueChange={(value) => setActiveTab(value as ChangesSidebarTab)}
