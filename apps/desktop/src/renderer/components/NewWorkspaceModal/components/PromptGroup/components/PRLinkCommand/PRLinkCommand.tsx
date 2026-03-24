@@ -18,6 +18,7 @@ import {
 } from "renderer/screens/main/components/PRIcon/PRIcon";
 
 const MAX_RESULTS = 20;
+const PR_URL_PATTERN = /github\.com\/.+\/.+\/pull\/\d+/;
 
 export interface SelectedPR {
 	prNumber: number;
@@ -43,10 +44,18 @@ export function PRLinkCommand({
 }: PRLinkCommandProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 
+	const isPRUrl = PR_URL_PATTERN.test(searchQuery);
+
 	const { data: pullRequests, isLoading } =
 		electronTrpc.projects.listPullRequests.useQuery(
 			{ projectId: projectId ?? "" },
 			{ enabled: !!projectId && open },
+		);
+
+	const { data: resolvedPR, isLoading: isResolving } =
+		electronTrpc.projects.resolvePullRequest.useQuery(
+			{ projectId: projectId ?? "", prUrl: searchQuery },
+			{ enabled: !!projectId && open && isPRUrl },
 		);
 
 	const prsWithSearchField = useMemo(
@@ -72,16 +81,19 @@ export function PRLinkCommand({
 	);
 
 	const searchResults = useMemo(() => {
+		if (isPRUrl) {
+			if (resolvedPR)
+				return [{ ...resolvedPR, prNumberStr: String(resolvedPR.prNumber) }];
+			return [];
+		}
 		if (!prsWithSearchField.length) return [];
 		if (!searchQuery) {
 			return prsWithSearchField.slice(0, MAX_RESULTS);
 		}
-		const urlMatch = prsWithSearchField.find((pr) => pr.url === searchQuery);
-		if (urlMatch) return [urlMatch];
 		return prFuse
 			.search(searchQuery, { limit: MAX_RESULTS })
 			.map((r) => r.item);
-	}, [prsWithSearchField, searchQuery, prFuse]);
+	}, [prsWithSearchField, searchQuery, prFuse, isPRUrl, resolvedPR]);
 
 	const handleClose = () => {
 		setSearchQuery("");
@@ -98,6 +110,8 @@ export function PRLinkCommand({
 		handleClose();
 	};
 
+	const isLoadingAny = isLoading || (isPRUrl && isResolving);
+
 	return (
 		<Popover open={open}>
 			<PopoverAnchor virtualRef={anchorRef as React.RefObject<Element>} />
@@ -112,21 +126,31 @@ export function PRLinkCommand({
 			>
 				<Command shouldFilter={false}>
 					<CommandInput
-						placeholder="Search pull requests..."
+						placeholder="Search or paste PR URL..."
 						value={searchQuery}
 						onValueChange={setSearchQuery}
 					/>
 					<CommandList className="max-h-[280px]">
 						{searchResults.length === 0 && (
 							<CommandEmpty>
-								{isLoading
-									? "Loading pull requests..."
-									: "No open pull requests found."}
+								{isLoadingAny
+									? isPRUrl
+										? "Resolving pull request..."
+										: "Loading pull requests..."
+									: isPRUrl
+										? "Pull request not found."
+										: "No open pull requests found."}
 							</CommandEmpty>
 						)}
 						{searchResults.length > 0 && (
 							<CommandGroup
-								heading={searchQuery ? "Results" : "Open pull requests"}
+								heading={
+									isPRUrl
+										? "Resolved"
+										: searchQuery
+											? "Results"
+											: "Open pull requests"
+								}
 							>
 								{searchResults.map((pr) => (
 									<CommandItem

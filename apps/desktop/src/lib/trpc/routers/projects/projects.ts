@@ -319,7 +319,7 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 							"--state",
 							"open",
 							"--limit",
-							"30",
+							"100",
 							"--json",
 							"number,title,url,state,isDraft",
 						],
@@ -357,6 +357,58 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 				} catch (err) {
 					console.warn("[listPullRequests] Failed to list PRs:", err);
 					return [];
+				}
+			}),
+
+		resolvePullRequest: publicProcedure
+			.input(z.object({ projectId: z.string(), prUrl: z.string() }))
+			.query(async ({ input }) => {
+				const project = localDb
+					.select()
+					.from(projects)
+					.where(eq(projects.id, input.projectId))
+					.get();
+				if (!project) return null;
+
+				const prNumberMatch = input.prUrl.match(/\/pull\/(\d+)/);
+				if (!prNumberMatch) return null;
+				const prNumber = prNumberMatch[1];
+
+				try {
+					const { stdout } = await execWithShellEnv(
+						"gh",
+						[
+							"pr",
+							"view",
+							prNumber,
+							"--json",
+							"number,title,url,state,isDraft",
+						],
+						{ cwd: project.mainRepoPath },
+					);
+					const raw: unknown = JSON.parse(stdout.trim());
+					if (!raw || typeof raw !== "object" || !("number" in raw))
+						return null;
+					const pr = raw as {
+						number: number;
+						title: string;
+						url: string;
+						state: string;
+						isDraft: boolean;
+					};
+					return {
+						prNumber: pr.number,
+						title: pr.title,
+						url: pr.url,
+						state: pr.isDraft
+							? "draft"
+							: pr.state === "OPEN"
+								? "open"
+								: pr.state.toLowerCase(),
+					};
+				} catch (err) {
+					console.warn("[resolvePullRequest] Failed to resolve PR:", err);
+					return null;
 				}
 			}),
 
