@@ -78,6 +78,7 @@ export const createQueryProcedures = () => {
 					worktree: worktree
 						? {
 								branch: worktree.branch,
+								baseBranch: worktree.baseBranch ?? null,
 								// Normalize to null to ensure consistent "incomplete init" detection in UI
 								gitStatus: worktree.gitStatus ?? null,
 								createdBySuperset: worktree.createdBySuperset,

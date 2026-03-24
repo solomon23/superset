@@ -5,6 +5,7 @@ import { cn } from "@superset/ui/utils";
 import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { HiMiniXMark } from "react-icons/hi2";
+import { LuMessageCircle } from "react-icons/lu";
 import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useWorkspaceDeleteHandler } from "renderer/react-query/workspaces";
@@ -150,6 +151,7 @@ export function WorkspaceListItem({
 		},
 	);
 	const githubStatus = allPRData?.[id]?.status ?? null;
+	const unresolvedCommentCount = allPRData?.[id]?.unresolvedCommentCount ?? 0;
 
 	const { status: localChanges } = useGitChangesStatus({
 		worktreePath,
@@ -304,7 +306,7 @@ export function WorkspaceListItem({
 
 			<div
 				className={cn(
-					"flex flex-col items-center shrink-0 mr-2.5 gap-0.5",
+					"flex flex-col items-center shrink-0 mr-2.5 gap-0.5 self-start",
 					showBranchSubtitle && "mt-0.5",
 				)}
 			>
@@ -340,6 +342,15 @@ export function WorkspaceListItem({
 				</Tooltip>
 				{workspaceRunState && showBranchSubtitle && (
 					<WorkspaceRunIndicator state={workspaceRunState} variant="inline" />
+				)}
+				{unresolvedCommentCount > 0 && (
+					<span
+						className="text-[9px] text-amber-500 flex items-center gap-px"
+						title={`${unresolvedCommentCount} unresolved`}
+					>
+						<LuMessageCircle className="size-2.5" />
+						{unresolvedCommentCount}
+					</span>
 				)}
 			</div>
 

@@ -272,7 +272,11 @@ export const createGitStatusProcedures = () => {
 
 			const results: Record<
 				string,
-				{ category: PRCategory; status: GitHubStatus | null }
+				{
+					category: PRCategory;
+					status: GitHubStatus | null;
+					unresolvedCommentCount: number;
+				}
 			> = {};
 			const batchInputs: Array<{
 				workspaceId: string;
@@ -283,13 +287,21 @@ export const createGitStatusProcedures = () => {
 
 			for (const ws of allWs) {
 				if (!ws.worktreeId) {
-					results[ws.workspaceId] = { category: "no-pr", status: null };
+					results[ws.workspaceId] = {
+						category: "no-pr",
+						status: null,
+						unresolvedCommentCount: 0,
+					};
 					continue;
 				}
 
 				const wt = getWorktree(ws.worktreeId);
 				if (!wt) {
-					results[ws.workspaceId] = { category: "no-pr", status: null };
+					results[ws.workspaceId] = {
+						category: "no-pr",
+						status: null,
+						unresolvedCommentCount: 0,
+					};
 					continue;
 				}
 
@@ -311,23 +323,31 @@ export const createGitStatusProcedures = () => {
 				);
 				const batchResults = await fetchAllPRStatuses(batchInputs);
 
-				for (const [wsId, status] of batchResults) {
-					results[wsId] = { category: categorizePR(status), status };
+				for (const [wsId, batchResult] of batchResults) {
+					results[wsId] = {
+						category: categorizePR(batchResult.status),
+						status: batchResult.status,
+						unresolvedCommentCount: batchResult.unresolvedCommentCount,
+					};
 
 					const input = batchInputs.find((i) => i.workspaceId === wsId);
 					if (input) {
 						localDb
 							.update(worktrees)
-							.set({ githubStatus: status })
+							.set({ githubStatus: batchResult.status })
 							.where(eq(worktrees.id, input.worktreeId))
 							.run();
-						setCachedGitHubStatus(input.worktreePath, status);
+						setCachedGitHubStatus(input.worktreePath, batchResult.status);
 					}
 				}
 
 				for (const input of batchInputs) {
 					if (!results[input.workspaceId]) {
-						results[input.workspaceId] = { category: "no-pr", status: null };
+						results[input.workspaceId] = {
+							category: "no-pr",
+							status: null,
+							unresolvedCommentCount: 0,
+						};
 					}
 				}
 			} catch (error) {
@@ -341,6 +361,7 @@ export const createGitStatusProcedures = () => {
 					results[input.workspaceId] = {
 						category: cached ? categorizePR(cached) : "no-pr",
 						status: cached,
+						unresolvedCommentCount: 0,
 					};
 				}
 			}

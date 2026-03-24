@@ -3,6 +3,7 @@ import { HiOutlineWifi } from "react-icons/hi2";
 import { useOnlineStatus } from "renderer/hooks/useOnlineStatus";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { getWorkspaceDisplayName } from "renderer/lib/getWorkspaceDisplayName";
+import { BranchInfo } from "./components/BranchInfo";
 import { NavigationControls } from "./components/NavigationControls";
 import { OpenInMenuButton } from "./components/OpenInMenuButton";
 import { OrganizationDropdown } from "./components/OrganizationDropdown";
@@ -42,6 +43,16 @@ export function TopBar() {
 				<SidebarToggle />
 				<NavigationControls />
 				<ResourceConsumption />
+				{workspace?.worktree?.branch && (
+					<BranchInfo
+						branch={workspace.worktree.branch}
+						baseBranch={
+							workspace.worktree.baseBranch ??
+							workspace.project?.defaultBranch ??
+							"main"
+						}
+					/>
+				)}
 			</div>
 
 			{isV2WorkspaceRoute ? (

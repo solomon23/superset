@@ -35,6 +35,11 @@ const PR_FIELDS_FRAGMENT = `
             }
           }
         }
+        reviewThreads(first: 100) {
+          nodes {
+            isResolved
+          }
+        }
         commits(last: 1) {
           nodes {
             commit {
@@ -191,30 +196,48 @@ function parseReviewRequests(
 		.filter(Boolean);
 }
 
+function countUnresolvedThreads(
+	reviewThreads: { nodes: Array<{ isResolved: boolean }> } | undefined,
+): number {
+	if (!reviewThreads?.nodes) return 0;
+	return reviewThreads.nodes.filter((t) => !t.isResolved).length;
+}
+
+export interface BatchPRResult {
+	status: GitHubStatus;
+	unresolvedCommentCount: number;
+}
+
 // biome-ignore lint/suspicious/noExplicitAny: GraphQL response is dynamic
-function parsePRNode(node: any): PRData {
+function parsePRNode(node: any): {
+	pr: PRData;
+	unresolvedCommentCount: number;
+} {
 	return {
-		number: node.number,
-		title: node.title,
-		url: node.url,
-		state: mapState(node.state, node.isDraft),
-		mergedAt: node.mergedAt ? new Date(node.mergedAt).getTime() : undefined,
-		additions: node.additions,
-		deletions: node.deletions,
-		headRefName: node.headRefName,
-		headRepositoryOwner: node.headRepositoryOwner?.login,
-		headRepositoryName: node.headRepository?.name,
-		isCrossRepository: node.isCrossRepository,
-		reviewDecision: mapReviewDecision(node.reviewDecision),
-		...parseChecks(node.commits?.nodes),
-		requestedReviewers: parseReviewRequests(node.reviewRequests),
+		pr: {
+			number: node.number,
+			title: node.title,
+			url: node.url,
+			state: mapState(node.state, node.isDraft),
+			mergedAt: node.mergedAt ? new Date(node.mergedAt).getTime() : undefined,
+			additions: node.additions,
+			deletions: node.deletions,
+			headRefName: node.headRefName,
+			headRepositoryOwner: node.headRepositoryOwner?.login,
+			headRepositoryName: node.headRepository?.name,
+			isCrossRepository: node.isCrossRepository,
+			reviewDecision: mapReviewDecision(node.reviewDecision),
+			...parseChecks(node.commits?.nodes),
+			requestedReviewers: parseReviewRequests(node.reviewRequests),
+		},
+		unresolvedCommentCount: countUnresolvedThreads(node.reviewThreads),
 	};
 }
 
 export async function fetchAllPRStatuses(
 	inputs: BatchPRInput[],
-): Promise<Map<string, GitHubStatus>> {
-	const results = new Map<string, GitHubStatus>();
+): Promise<Map<string, BatchPRResult>> {
+	const results = new Map<string, BatchPRResult>();
 
 	if (inputs.length === 0) return results;
 
@@ -240,10 +263,13 @@ export async function fetchAllPRStatuses(
 
 		if (!resolved) {
 			results.set(input.workspaceId, {
-				pr: null,
-				repoUrl: "",
-				branchExistsOnRemote: false,
-				lastRefreshed: Date.now(),
+				status: {
+					pr: null,
+					repoUrl: "",
+					branchExistsOnRemote: false,
+					lastRefreshed: Date.now(),
+				},
+				unresolvedCommentCount: 0,
 			});
 			continue;
 		}
@@ -309,19 +335,23 @@ export async function fetchAllPRStatuses(
 			const branchEntry = group.branches[i];
 			const prAlias = `pr_${i}`;
 			const prNodes = repoData[prAlias]?.nodes;
-			const pr = prNodes && prNodes.length > 0 ? parsePRNode(prNodes[0]) : null;
+			const parsed =
+				prNodes && prNodes.length > 0 ? parsePRNode(prNodes[0]) : null;
 
-			const status: GitHubStatus = {
-				pr,
-				repoUrl,
-				upstreamUrl: group.repoContext.upstreamUrl,
-				isFork: group.repoContext.isFork,
-				branchExistsOnRemote: pr !== null,
-				lastRefreshed: Date.now(),
+			const result: BatchPRResult = {
+				status: {
+					pr: parsed?.pr ?? null,
+					repoUrl,
+					upstreamUrl: group.repoContext.upstreamUrl,
+					isFork: group.repoContext.isFork,
+					branchExistsOnRemote: parsed !== null,
+					lastRefreshed: Date.now(),
+				},
+				unresolvedCommentCount: parsed?.unresolvedCommentCount ?? 0,
 			};
 
 			for (const input of branchEntry.inputs) {
-				results.set(input.workspaceId, status);
+				results.set(input.workspaceId, result);
 			}
 		}
 	}
