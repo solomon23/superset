@@ -110,15 +110,12 @@ export function ProjectSection({
 		(s) => s.getProjectMeta(projectId).autoOrganizeByPRStatus,
 	);
 
-	const { data: prStatuses } =
-		electronTrpc.workspaces.getProjectPRStatuses.useQuery(
-			{ projectId },
-			{
-				enabled: autoOrganizeEnabled,
-				refetchInterval: 60_000,
-				staleTime: 30_000,
-			},
-		);
+	const { data: allPRStatuses } =
+		electronTrpc.workspaces.getAllPRStatuses.useQuery(undefined, {
+			enabled: autoOrganizeEnabled,
+			refetchInterval: 10_000,
+			staleTime: 4_000,
+		});
 
 	const [collapsedVirtualSections, setCollapsedVirtualSections] = useState<
 		Set<string>
@@ -146,7 +143,7 @@ export function ProjectSection({
 		) : null;
 
 	const { orderedWorkspaceIds, topLevelChildren } = useMemo(() => {
-		if (autoOrganizeEnabled && prStatuses) {
+		if (autoOrganizeEnabled && allPRStatuses) {
 			const allWs = [...workspaces, ...sections.flatMap((s) => s.workspaces)];
 
 			const ungrouped: SidebarWorkspace[] = [];
@@ -154,7 +151,7 @@ export function ProjectSection({
 			for (const cat of PR_ORDER) grouped.set(cat, []);
 
 			for (const ws of allWs) {
-				const cat = prStatuses[ws.id] ?? "no-pr";
+				const cat = allPRStatuses[ws.id]?.category ?? "no-pr";
 				if (cat === "no-pr" && ws.type === "branch") {
 					ungrouped.push(ws);
 				} else {
@@ -252,7 +249,7 @@ export function ProjectSection({
 		};
 	}, [
 		autoOrganizeEnabled,
-		prStatuses,
+		allPRStatuses,
 		collapsedVirtualSections,
 		shortcutBaseIndex,
 		sections,

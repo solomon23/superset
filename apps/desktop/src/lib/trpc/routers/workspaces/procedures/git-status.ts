@@ -23,6 +23,7 @@ import {
 	fetchGitHubPRStatus,
 	type PullRequestCommentsTarget,
 } from "../utils/github";
+import { setCachedGitHubStatus } from "../utils/github/cache";
 import { categorizePR, type PRCategory } from "../utils/map-pr-state";
 
 const gitHubPRCommentsInputSchema = z.object({
@@ -259,89 +260,93 @@ export const createGitStatusProcedures = () => {
 				});
 			}),
 
-		getProjectPRStatuses: publicProcedure
-			.input(z.object({ projectId: z.string() }))
-			.query(async ({ input }) => {
-				const projectWorkspaces = localDb
-					.select({
-						workspaceId: workspaces.id,
-						worktreeId: workspaces.worktreeId,
-					})
-					.from(workspaces)
-					.where(
-						and(
-							eq(workspaces.projectId, input.projectId),
-							isNull(workspaces.deletingAt),
-						),
-					)
-					.all();
+		getAllPRStatuses: publicProcedure.query(async () => {
+			const allWs = localDb
+				.select({
+					workspaceId: workspaces.id,
+					worktreeId: workspaces.worktreeId,
+				})
+				.from(workspaces)
+				.where(isNull(workspaces.deletingAt))
+				.all();
 
-				const STALE_THRESHOLD_MS = 5 * 60 * 1000;
-				const MAX_CONCURRENT_REFRESHES = 5;
-				const now = Date.now();
+			const results: Record<
+				string,
+				{ category: PRCategory; status: GitHubStatus | null }
+			> = {};
+			const batchInputs: Array<{
+				workspaceId: string;
+				worktreeId: string;
+				branch: string;
+				worktreePath: string;
+			}> = [];
 
-				const results: Record<string, PRCategory> = {};
-
-				const staleWorktrees: Array<{
-					workspaceId: string;
-					worktreeId: string;
-					path: string;
-				}> = [];
-
-				for (const ws of projectWorkspaces) {
-					if (!ws.worktreeId) {
-						results[ws.workspaceId] = "no-pr";
-						continue;
-					}
-
-					const wt = getWorktree(ws.worktreeId);
-					if (!wt) {
-						results[ws.workspaceId] = "no-pr";
-						continue;
-					}
-
-					const cached = wt.githubStatus;
-					if (cached) {
-						results[ws.workspaceId] = categorizePR(cached);
-
-						if (
-							cached.lastRefreshed &&
-							now - cached.lastRefreshed > STALE_THRESHOLD_MS
-						) {
-							staleWorktrees.push({
-								workspaceId: ws.workspaceId,
-								worktreeId: wt.id,
-								path: wt.path,
-							});
-						}
-					} else {
-						results[ws.workspaceId] = "no-pr";
-						staleWorktrees.push({
-							workspaceId: ws.workspaceId,
-							worktreeId: wt.id,
-							path: wt.path,
-						});
-					}
+			for (const ws of allWs) {
+				if (!ws.worktreeId) {
+					results[ws.workspaceId] = { category: "no-pr", status: null };
+					continue;
 				}
 
-				const toRefresh = staleWorktrees.slice(0, MAX_CONCURRENT_REFRESHES);
-				if (toRefresh.length > 0) {
-					void Promise.allSettled(
-						toRefresh.map(async (item) => {
-							const freshStatus = await fetchGitHubPRStatus(item.path);
-							if (freshStatus) {
-								localDb
-									.update(worktrees)
-									.set({ githubStatus: freshStatus })
-									.where(eq(worktrees.id, item.worktreeId))
-									.run();
-							}
-						}),
-					);
+				const wt = getWorktree(ws.worktreeId);
+				if (!wt) {
+					results[ws.workspaceId] = { category: "no-pr", status: null };
+					continue;
 				}
 
+				batchInputs.push({
+					workspaceId: ws.workspaceId,
+					worktreeId: wt.id,
+					branch: wt.branch,
+					worktreePath: wt.path,
+				});
+			}
+
+			if (batchInputs.length === 0) {
 				return results;
-			}),
+			}
+
+			try {
+				const { fetchAllPRStatuses } = await import(
+					"../utils/github/batch-pr-status"
+				);
+				const batchResults = await fetchAllPRStatuses(batchInputs);
+
+				for (const [wsId, status] of batchResults) {
+					results[wsId] = { category: categorizePR(status), status };
+
+					const input = batchInputs.find((i) => i.workspaceId === wsId);
+					if (input) {
+						localDb
+							.update(worktrees)
+							.set({ githubStatus: status })
+							.where(eq(worktrees.id, input.worktreeId))
+							.run();
+						setCachedGitHubStatus(input.worktreePath, status);
+					}
+				}
+
+				for (const input of batchInputs) {
+					if (!results[input.workspaceId]) {
+						results[input.workspaceId] = { category: "no-pr", status: null };
+					}
+				}
+			} catch (error) {
+				console.warn(
+					"[getAllPRStatuses] Batch fetch failed, falling back to cache:",
+					error,
+				);
+				for (const input of batchInputs) {
+					const wt = getWorktree(input.worktreeId);
+					const cached = wt?.githubStatus ?? null;
+					results[input.workspaceId] = {
+						category: cached ? categorizePR(cached) : "no-pr",
+						status: cached,
+					};
+				}
+			}
+
+			return results;
+		}),
 
 		getExternalWorktrees: publicProcedure
 			.input(z.object({ projectId: z.string() }))

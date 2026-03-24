@@ -142,14 +142,14 @@ export function WorkspaceListItem({
 	const { showDeleteDialog, setShowDeleteDialog, handleDeleteClick } =
 		useWorkspaceDeleteHandler();
 
-	const { data: githubStatus } =
-		electronTrpc.workspaces.getGitHubStatus.useQuery(
-			{ workspaceId: id },
-			{
-				enabled: hasHovered && type === "worktree",
-				staleTime: GITHUB_STATUS_STALE_TIME,
-			},
-		);
+	const { data: allPRData } = electronTrpc.workspaces.getAllPRStatuses.useQuery(
+		undefined,
+		{
+			refetchInterval: 10_000,
+			staleTime: 4_000,
+		},
+	);
+	const githubStatus = allPRData?.[id]?.status ?? null;
 
 	const { status: localChanges } = useGitChangesStatus({
 		worktreePath,
