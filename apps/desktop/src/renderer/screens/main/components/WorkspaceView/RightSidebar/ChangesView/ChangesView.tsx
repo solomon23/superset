@@ -703,16 +703,13 @@ export function ChangesView({
 
 	return (
 		<div className="flex flex-col flex-1 min-h-0">
-			{activePullRequest &&
-				(activePullRequest.state === "open" ||
-					activePullRequest.state === "draft") &&
-				worktreePath && (
-					<PRStatusBanner
-						pr={activePullRequest}
-						worktreePath={worktreePath}
-						onRefresh={handleRefresh}
-					/>
-				)}
+			{activePullRequest && worktreePath && (
+				<PRStatusBanner
+					pr={activePullRequest}
+					worktreePath={worktreePath}
+					onRefresh={handleRefresh}
+				/>
+			)}
 			<Tabs
 				value={activeTab}
 				onValueChange={(value) => setActiveTab(value as ChangesSidebarTab)}

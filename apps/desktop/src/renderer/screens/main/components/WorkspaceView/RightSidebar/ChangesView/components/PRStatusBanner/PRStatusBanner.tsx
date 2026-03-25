@@ -18,9 +18,18 @@ interface PRStatusBannerProps {
 	onRefresh: () => void;
 }
 
-type BannerVariant = "ready" | "blocked" | "failing" | "pending";
+type BannerVariant =
+	| "ready"
+	| "blocked"
+	| "failing"
+	| "pending"
+	| "merged"
+	| "closed";
 
 function getBannerVariant(pr: NonNullable<GitHubStatus["pr"]>): BannerVariant {
+	if (pr.state === "merged") return "merged";
+	if (pr.state === "closed") return "closed";
+
 	const checks = pr.checks ?? [];
 	const hasFailures = checks.some((c) => c.status === "failure");
 
@@ -51,6 +60,14 @@ const variantStyles = {
 		banner: "bg-muted/50 border-border",
 		badge: "bg-muted text-muted-foreground border border-border",
 	},
+	merged: {
+		banner: "bg-violet-500/10 border-violet-500/20",
+		badge: "bg-violet-500/15 text-violet-500 border border-violet-500/30",
+	},
+	closed: {
+		banner: "bg-red-500/10 border-red-500/20",
+		badge: "bg-red-500/15 text-red-500 border border-red-500/30",
+	},
 } as const;
 
 function getBannerMessage(
@@ -76,6 +93,10 @@ function getBannerMessage(
 		case "blocked":
 			if (pr.reviewDecision === "changes_requested") return "Changes requested";
 			return "Review required";
+		case "merged":
+			return "Merged";
+		case "closed":
+			return "Closed";
 	}
 }
 
@@ -111,6 +132,8 @@ export function PRStatusBanner({
 		blocked: LuShieldAlert,
 		failing: LuX,
 		pending: LuLoader,
+		merged: LuGitMerge,
+		closed: LuX,
 	}[variant];
 
 	const iconColor = {
@@ -118,6 +141,8 @@ export function PRStatusBanner({
 		blocked: "text-amber-500",
 		failing: "text-red-500",
 		pending: "text-amber-500 animate-spin",
+		merged: "text-violet-500",
+		closed: "text-red-500",
 	}[variant];
 
 	return (
