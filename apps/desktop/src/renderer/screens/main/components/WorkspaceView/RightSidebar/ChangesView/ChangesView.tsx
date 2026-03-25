@@ -262,6 +262,22 @@ export function ChangesView({
 		},
 	);
 
+	const { data: allPRData } = electronTrpc.workspaces.getAllPRStatuses.useQuery(
+		undefined,
+		{
+			refetchInterval: 10_000,
+			staleTime: 4_000,
+		},
+	);
+	const prBaseRef =
+		allPRData?.[workspaceId ?? ""]?.status?.pr?.baseRefName ?? null;
+
+	useEffect(() => {
+		if (prBaseRef && effectiveBaseBranch && prBaseRef !== effectiveBaseBranch) {
+			trpcUtils.changes.getBranches.invalidate();
+		}
+	}, [prBaseRef, effectiveBaseBranch, trpcUtils]);
+
 	useBranchSyncInvalidation({
 		gitBranch: status?.branch ?? branchData?.currentBranch ?? undefined,
 		workspaceBranch: workspace?.branch,

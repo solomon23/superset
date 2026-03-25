@@ -28,6 +28,13 @@ export function TopBar() {
 		{ id: workspaceId ?? "" },
 		{ enabled: !!workspaceId && !isV2WorkspaceRoute },
 	);
+	const { data: allPRData } = electronTrpc.workspaces.getAllPRStatuses.useQuery(
+		undefined,
+		{
+			refetchInterval: 10_000,
+			staleTime: 4_000,
+		},
+	);
 	const isOnline = useOnlineStatus();
 	// Default to Mac layout while loading to avoid overlap with traffic lights
 	const isMac = platform === undefined || platform === "darwin";
@@ -47,6 +54,7 @@ export function TopBar() {
 					<BranchInfo
 						branch={workspace.worktree.branch}
 						baseBranch={
+							allPRData?.[workspaceId ?? ""]?.status?.pr?.baseRefName ??
 							workspace.worktree.baseBranch ??
 							workspace.project?.defaultBranch ??
 							"main"

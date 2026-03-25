@@ -54,6 +54,7 @@ export const gitHubStatusSchema = z.object({
 			additions: z.number(),
 			deletions: z.number(),
 			headRefName: z.string().optional(),
+			baseRefName: z.string().optional(),
 			headRepositoryOwner: z.string().optional(),
 			headRepositoryName: z.string().optional(),
 			isCrossRepository: z.boolean().optional(),

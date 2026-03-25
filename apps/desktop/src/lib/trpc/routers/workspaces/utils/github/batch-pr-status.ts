@@ -22,6 +22,7 @@ const PR_FIELDS_FRAGMENT = `
         mergedAt
         additions
         deletions
+        baseRefName
         headRefName
         headRepository { name }
         headRepositoryOwner { login }
@@ -223,6 +224,7 @@ function parsePRNode(node: any): {
 			additions: node.additions,
 			deletions: node.deletions,
 			headRefName: node.headRefName,
+			baseRefName: node.baseRefName,
 			headRepositoryOwner: node.headRepositoryOwner?.login,
 			headRepositoryName: node.headRepository?.name,
 			isCrossRepository: node.isCrossRepository,

@@ -332,9 +332,33 @@ export const createGitStatusProcedures = () => {
 
 					const input = batchInputs.find((i) => i.workspaceId === wsId);
 					if (input) {
+						const prBaseRef = batchResult.status.pr?.baseRefName;
+						const updates: {
+							githubStatus: typeof batchResult.status;
+							baseBranch?: string;
+						} = {
+							githubStatus: batchResult.status,
+						};
+						if (prBaseRef) {
+							const wt = getWorktree(input.worktreeId);
+							if (wt) {
+								if (wt.baseBranch !== prBaseRef) {
+									updates.baseBranch = prBaseRef;
+									void import("../utils/base-branch-config").then(
+										({ setBranchBaseConfig }) =>
+											setBranchBaseConfig({
+												repoPath: input.worktreePath,
+												branch: wt.branch,
+												baseBranch: prBaseRef,
+												isExplicit: false,
+											}).catch(() => {}),
+									);
+								}
+							}
+						}
 						localDb
 							.update(worktrees)
-							.set({ githubStatus: batchResult.status })
+							.set(updates)
 							.where(eq(worktrees.id, input.worktreeId))
 							.run();
 						setCachedGitHubStatus(input.worktreePath, batchResult.status);
