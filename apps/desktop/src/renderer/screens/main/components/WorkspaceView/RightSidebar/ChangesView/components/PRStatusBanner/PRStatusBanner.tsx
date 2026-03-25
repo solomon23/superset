@@ -23,12 +23,14 @@ type BannerVariant =
 	| "blocked"
 	| "failing"
 	| "pending"
+	| "draft"
 	| "merged"
 	| "closed";
 
 function getBannerVariant(pr: NonNullable<GitHubStatus["pr"]>): BannerVariant {
 	if (pr.state === "merged") return "merged";
 	if (pr.state === "closed") return "closed";
+	if (pr.state === "draft") return "draft";
 
 	const checks = pr.checks ?? [];
 	const hasFailures = checks.some((c) => c.status === "failure");
@@ -57,6 +59,10 @@ const variantStyles = {
 		badge: "bg-amber-500/15 text-amber-500 border border-amber-500/30",
 	},
 	pending: {
+		banner: "bg-muted/50 border-border",
+		badge: "bg-muted text-muted-foreground border border-border",
+	},
+	draft: {
 		banner: "bg-muted/50 border-border",
 		badge: "bg-muted text-muted-foreground border border-border",
 	},
@@ -93,6 +99,8 @@ function getBannerMessage(
 		case "blocked":
 			if (pr.reviewDecision === "changes_requested") return "Changes requested";
 			return "Review required";
+		case "draft":
+			return "Draft";
 		case "merged":
 			return "Merged";
 		case "closed":
@@ -100,11 +108,38 @@ function getBannerMessage(
 	}
 }
 
+const statusIcons = {
+	ready: LuCheck,
+	blocked: LuShieldAlert,
+	failing: LuX,
+	pending: LuLoader,
+	draft: LuGitPullRequest,
+	merged: LuGitMerge,
+	closed: LuX,
+};
+
+const statusIconColors = {
+	ready: "text-emerald-500",
+	blocked: "text-amber-500",
+	failing: "text-red-500",
+	pending: "text-amber-500 animate-spin",
+	draft: "text-muted-foreground",
+	merged: "text-violet-500",
+	closed: "text-red-500",
+};
+
 export function PRStatusBanner({
 	pr,
 	worktreePath,
 	onRefresh,
 }: PRStatusBannerProps) {
+	const trpcUtils = electronTrpc.useUtils();
+
+	const refreshAll = () => {
+		onRefresh();
+		trpcUtils.workspaces.getAllPRStatuses.invalidate();
+	};
+
 	const mergePRMutation = electronTrpc.changes.mergePR.useMutation({
 		onMutate: () => {
 			const toastId = toast.loading("Merging PR...");
@@ -112,7 +147,7 @@ export function PRStatusBanner({
 		},
 		onSuccess: (_data, _variables, context) => {
 			toast.success("PR merged successfully", { id: context?.toastId });
-			onRefresh();
+			refreshAll();
 		},
 		onError: (error, _variables, context) =>
 			toast.error(`Merge failed: ${error.message}`, {
@@ -120,30 +155,31 @@ export function PRStatusBanner({
 			}),
 	});
 
+	const markReadyMutation = electronTrpc.changes.markPRReady.useMutation({
+		onMutate: () => {
+			const toastId = toast.loading("Marking as ready for review...");
+			return { toastId };
+		},
+		onSuccess: (_data, _variables, context) => {
+			toast.success("PR marked as ready for review", {
+				id: context?.toastId,
+			});
+			refreshAll();
+		},
+		onError: (error, _variables, context) =>
+			toast.error(`Failed: ${error.message}`, { id: context?.toastId }),
+	});
+
 	const handleMerge = (strategy: "merge" | "squash" | "rebase") =>
 		mergePRMutation.mutate({ worktreePath, strategy });
+
+	const handleMarkReady = () => markReadyMutation.mutate({ worktreePath });
 
 	const variant = getBannerVariant(pr);
 	const styles = variantStyles[variant];
 	const message = getBannerMessage(variant, pr);
-
-	const StatusIcon = {
-		ready: LuCheck,
-		blocked: LuShieldAlert,
-		failing: LuX,
-		pending: LuLoader,
-		merged: LuGitMerge,
-		closed: LuX,
-	}[variant];
-
-	const iconColor = {
-		ready: "text-emerald-500",
-		blocked: "text-amber-500",
-		failing: "text-red-500",
-		pending: "text-amber-500 animate-spin",
-		merged: "text-violet-500",
-		closed: "text-red-500",
-	}[variant];
+	const StatusIcon = statusIcons[variant];
+	const iconColor = statusIconColors[variant];
 
 	return (
 		<div
@@ -186,6 +222,26 @@ export function PRStatusBanner({
 						<LuGitMerge className="size-3" />
 					)}
 					Merge
+				</button>
+			)}
+
+			{variant === "draft" && (
+				<button
+					type="button"
+					onClick={handleMarkReady}
+					className={cn(
+						"flex items-center gap-1 shrink-0 rounded px-2 py-1 font-medium transition-colors",
+						"bg-foreground text-background hover:bg-foreground/90",
+						markReadyMutation.isPending && "opacity-60",
+					)}
+					disabled={markReadyMutation.isPending}
+				>
+					{markReadyMutation.isPending ? (
+						<LuLoader className="size-3 animate-spin" />
+					) : (
+						<LuCheck className="size-3" />
+					)}
+					Ready
 				</button>
 			)}
 		</div>

@@ -745,5 +745,23 @@ export const createGitOperationsRouter = () => {
 					}
 				},
 			),
+		markPRReady: publicProcedure
+			.input(z.object({ worktreePath: z.string() }))
+			.mutation(async ({ input }) => {
+				assertRegisteredWorktree(input.worktreePath);
+				try {
+					await execWithShellEnv("gh", ["pr", "ready"], {
+						cwd: input.worktreePath,
+					});
+					return { success: true };
+				} catch (error) {
+					const message =
+						error instanceof Error ? error.message : String(error);
+					throw new TRPCError({
+						code: "INTERNAL_SERVER_ERROR",
+						message: `Failed to mark PR as ready: ${message}`,
+					});
+				}
+			}),
 	});
 };
