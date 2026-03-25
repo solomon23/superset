@@ -10,8 +10,11 @@ interface UseChatDisplayOptions {
 	fps?: number;
 }
 
+/** Interval (ms) used when the session is idle (not streaming). */
+const IDLE_REFETCH_INTERVAL_MS = 2000;
+
 function toRefetchIntervalMs(fps: number): number {
-	if (!Number.isFinite(fps) || fps <= 0) return Math.floor(1000 / 60);
+	if (!Number.isFinite(fps) || fps <= 0) return Math.floor(1000 / 4);
 	return Math.max(16, Math.floor(1000 / fps));
 }
 
@@ -107,17 +110,25 @@ function getLegacyImagePayload(
 }
 
 export function useChatDisplay(options: UseChatDisplayOptions) {
-	const { sessionId, workspaceId, enabled = true, fps = 60 } = options;
+	const { sessionId, workspaceId, enabled = true, fps = 4 } = options;
 	const utils = workspaceTrpc.useUtils();
 	const [commandError, setCommandError] = useState<unknown>(null);
 	const queryInput =
 		sessionId === null ? undefined : { sessionId, workspaceId };
 	const isQueryEnabled = enabled && Boolean(sessionId);
-	const refetchIntervalMs = toRefetchIntervalMs(fps);
+	const activeRefetchIntervalMs = toRefetchIntervalMs(fps);
+
+	// Poll quickly only while the assistant is actively streaming;
+	// drop to a slow cadence when idle to avoid unnecessary IPC traffic.
+	const [isRunningForInterval, setIsRunningForInterval] = useState(false);
+	const refetchIntervalMs = isRunningForInterval
+		? activeRefetchIntervalMs
+		: IDLE_REFETCH_INTERVAL_MS;
+
 	const queryOptions = {
 		enabled: isQueryEnabled && queryInput !== undefined,
 		refetchInterval: refetchIntervalMs,
-		refetchIntervalInBackground: true,
+		refetchIntervalInBackground: false,
 		refetchOnWindowFocus: false,
 		staleTime: 0,
 		gcTime: 0,
@@ -149,6 +160,12 @@ export function useChatDisplay(options: UseChatDisplayOptions) {
 			: null;
 	const currentMessage = displayState?.currentMessage ?? null;
 	const isRunning = displayState?.isRunning ?? false;
+
+	// Sync polling cadence with running state so interval reacts immediately.
+	useEffect(() => {
+		setIsRunningForInterval(isRunning);
+	}, [isRunning]);
+
 	const isConversationLoading =
 		isQueryEnabled &&
 		messagesQuery.data === undefined &&

@@ -3,6 +3,8 @@ import type { inferRouterOutputs } from "@trpc/server";
 import type { ChatRuntimeServiceRouter } from "../../../server/trpc";
 import {
 	findLatestAssistantErrorMessage,
+	IDLE_REFETCH_INTERVAL_MS,
+	toRefetchIntervalMs,
 	withoutActiveTurnAssistantHistory,
 } from "./use-chat-display";
 
@@ -120,5 +122,32 @@ describe("findLatestAssistantErrorMessage", () => {
 		]);
 
 		expect(error).toBeNull();
+	});
+});
+
+describe("toRefetchIntervalMs — polling interval regression (#2861)", () => {
+	it("default fps (4) produces a 250ms interval, not the old 16ms", () => {
+		// The old default was fps=60 → 16ms, firing 120 IPC round-trips/sec.
+		// That caused rhythmic input lag even when the chat was idle.
+		const interval = toRefetchIntervalMs(4);
+		expect(interval).toBe(250);
+		// Verify the old value was too aggressive:
+		const oldInterval = toRefetchIntervalMs(60);
+		expect(oldInterval).toBe(16);
+	});
+
+	it("idle interval is at least 2 seconds to avoid unnecessary polling", () => {
+		expect(IDLE_REFETCH_INTERVAL_MS).toBeGreaterThanOrEqual(2000);
+	});
+
+	it("handles invalid fps by falling back to 4fps (250ms)", () => {
+		expect(toRefetchIntervalMs(0)).toBe(250);
+		expect(toRefetchIntervalMs(-1)).toBe(250);
+		expect(toRefetchIntervalMs(Number.NaN)).toBe(250);
+		expect(toRefetchIntervalMs(Number.POSITIVE_INFINITY)).toBe(250);
+	});
+
+	it("clamps extremely high fps to 16ms minimum", () => {
+		expect(toRefetchIntervalMs(1000)).toBe(16);
 	});
 });
